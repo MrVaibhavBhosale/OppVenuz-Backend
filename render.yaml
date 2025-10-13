@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: oppvenuz-backend
+    env: python
+    plan: free
+    branch: master
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+    startCommand: gunicorn oppvenuz.wsgi:application
+    rootDir: backend
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: oppvenuz.settings
