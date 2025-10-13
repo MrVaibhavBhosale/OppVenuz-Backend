@@ -3,12 +3,25 @@ services:
     name: oppvenuz-backend
     env: python
     plan: free
-    branch: master
-    buildCommand: |
-      pip install -r requirements.txt
-      python manage.py collectstatic --noinput
-    startCommand: gunicorn oppvenuz.wsgi:application
-    rootDir: backend
+    branch: main
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
+    startCommand: gunicorn config.wsgi:application
     envVars:
-      - key: DJANGO_SETTINGS_MODULE
-        value: oppvenuz.settings
+      - key: SECRET_KEY
+        fromDatabase: false
+        value: your_secret_key_here
+      - key: DB_NAME
+        fromDatabase: false
+        value: your_db_name_here
+      - key: DB_USER
+        fromDatabase: false
+        value: your_db_user_here
+      - key: DB_PASSWORD
+        fromDatabase: false
+        value: your_db_password_here
+      - key: DB_HOST
+        fromDatabase: false
+        value: your_db_host_here
+      - key: DB_PORT
+        fromDatabase: false
+        value: your_db_port_here
