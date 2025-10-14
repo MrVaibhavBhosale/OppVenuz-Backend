@@ -4,24 +4,21 @@ services:
     env: python
     plan: free
     branch: main
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
-    startCommand: gunicorn config.wsgi:application
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: SECRET_KEY
-        fromDatabase: false
         value: your_secret_key_here
       - key: DB_NAME
-        fromDatabase: false
-        value: your_db_name_here
+        value: oppvenuzdb
       - key: DB_USER
-        fromDatabase: false
-        value: your_db_user_here
+        value: oppvenuzdb_user
       - key: DB_PASSWORD
-        fromDatabase: false
-        value: your_db_password_here
+        value: your_password
       - key: DB_HOST
-        fromDatabase: false
-        value: your_db_host_here
+        value: dpg-d3mc17emcj7s73aigvc0-a
       - key: DB_PORT
-        fromDatabase: false
-        value: your_db_port_here
+        value: 5432
