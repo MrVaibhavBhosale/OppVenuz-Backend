@@ -37,8 +37,7 @@ logger = logging.getLogger("django")
 class RoleCreateView(generics.CreateAPIView):
     queryset = Role_master.objects.all()
     serializer_class = RoleMasterSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+  
 
     def perform_create(self, serializer):
         user_fullname = getattr(self.request.user, 'fullname', self.request.user.username)
@@ -68,8 +67,7 @@ class RoleListView(generics.ListAPIView):
 class RoleUpdateView(generics.UpdateAPIView):
     queryset = Role_master.objects.all()
     serializer_class = RoleMasterSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -89,8 +87,7 @@ class RoleUpdateView(generics.UpdateAPIView):
 class RoleDeleteView(generics.DestroyAPIView):
     queryset = Role_master.objects.all()
     serializer_class = RoleMasterSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
     lookup_field = 'id'
 
     def destroy(self, request, *args, **kwargs):
@@ -119,8 +116,7 @@ class RoleDeleteView(generics.DestroyAPIView):
 class BestSuitedForCreateView(generics.CreateAPIView):
     queryset = Best_suited_for.objects.all()
     serializer_class = BestSuitedForSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -137,8 +133,7 @@ class BestSuitedForCreateView(generics.CreateAPIView):
 class BestSuitedForListView(generics.ListAPIView):
     serializer_class = BestSuitedForSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
 
     def get_queryset(self):
         queryset = Best_suited_for.objects.filter(status=1).order_by('-id')
@@ -156,8 +151,7 @@ class BestSuitedForListView(generics.ListAPIView):
 class BestSuitedForUpdateView(generics.UpdateAPIView):
     queryset = Best_suited_for.objects.all()
     serializer_class = BestSuitedForSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
     lookup_field = 'id'
 
     def perform_update(self, serializer):
