@@ -55,8 +55,8 @@ google-cloud-storage==2.7.0
 google-crc32c==1.5.0
 google-resumable-media==2.4.0
 googleapis-common-protos==1.57.0
-#grpcio==1.74.0
-#grpcio-status==1.62.3
+grpcio==1.74.0
+grpcio-status==1.62.3
 httplib2==0.21.0
 idna==3.4
 inapppy==2.5.2
@@ -130,8 +130,8 @@ urllib3==1.26.13
 wcwidth==0.2.13
 wrapt==1.14.1
 yarl==1.8.2
-yarl==1.8.2
 gunicorn==21.2.0
+
 
 
 
