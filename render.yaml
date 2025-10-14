@@ -18,10 +18,10 @@ services:
       - key: DB_USER
         value: oppvenuzdb_user
       - key: DB_PASSWORD
-        value: your_actual_password_here
+        value: your_database_password_here
       - key: DB_HOST
         value: dpg-d3mc17emcj7s73aigvc0-a
       - key: DB_PORT
         value: 5432
-      - key: API_BEARER_TOKEN
-        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzYzMDU5MTg4LCJpYXQiOjE3NjAwMzUxODgsImp0aSI6ImFiOGJmYzdjNWQ2MzQ3NmRiZGI5ZmIxZTEyNzkxNWNlIiwidXNlcl9pZCI6NjExfQ.3NaDqwQT6__V7cd2SscOm46VZFhXp_hkRhjkGG1vZhE
+      - key: DEBUG
+        value: "False"
