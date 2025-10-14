@@ -73,11 +73,11 @@ msgpack==1.0.4
 multidict==6.0.4
 mypy-extensions==0.4.3
 nexmo==2.5.2
-numpy==1.26.4
+numpy==1.24.4
 oauth2client==4.1.3
 oauthlib==3.2.2
 packaging==22.0
-pandas==2.1.1
+pandas==1.5.3
 parso==0.8.4
 pathspec==0.10.3
 pexpect==4.9.0
@@ -132,5 +132,6 @@ wrapt==1.14.1
 yarl==1.8.2
 yarl==1.8.2
 gunicorn
+
 
 
