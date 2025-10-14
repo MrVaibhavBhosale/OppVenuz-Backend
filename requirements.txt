@@ -55,8 +55,8 @@ google-cloud-storage==2.7.0
 google-crc32c==1.5.0
 google-resumable-media==2.4.0
 googleapis-common-protos==1.57.0
-grpcio==1.74.0
-grpcio-status==1.62.3
+#grpcio==1.74.0
+#grpcio-status==1.62.3
 httplib2==0.21.0
 idna==3.4
 inapppy==2.5.2
@@ -73,11 +73,11 @@ msgpack==1.0.4
 multidict==6.0.4
 mypy-extensions==0.4.3
 nexmo==2.5.2
-
+numpy==1.26.4
 oauth2client==4.1.3
 oauthlib==3.2.2
 packaging==22.0
-
+pandas==2.1.1
 parso==0.8.4
 pathspec==0.10.3
 pexpect==4.9.0
@@ -103,8 +103,7 @@ python-jose==3.3.0
 python3-openid==3.2.0
 pytz==2022.7
 pytz-deprecation-shim==0.1.0.post0
-PyYAML>=6.1
-
+PyYAML==6.0
 requests==2.26.0
 requests-oauthlib==1.3.1
 rsa==4.9
@@ -132,6 +131,7 @@ wcwidth==0.2.13
 wrapt==1.14.1
 yarl==1.8.2
 gunicorn==21.2.0
+
 
 
 
