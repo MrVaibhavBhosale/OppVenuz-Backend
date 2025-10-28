@@ -116,6 +116,18 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
+# ✅ Media file settings (Render persistent storage)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Render server वर persistent disk असेल तर (recommended):
+# MEDIA_ROOT = '/opt/render/project/src/media'
+
+# ✅ File upload limit (optional)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
+
+
 # ✅ JWT Token lifetime
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
