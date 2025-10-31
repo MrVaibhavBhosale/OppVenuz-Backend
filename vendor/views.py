@@ -26,8 +26,10 @@ from .serializers import (
     VendorSignupSerializer,
     VendorLoginSerializer,
     VendorDataSerializer,
-    RequestOTPSerializer,
-    VerifyOTPSerializer,
+    VerifyEmailOTPSerializer,
+    VerifyPhoneOTPSerializer,
+    RequestEmailOTPSerializer,
+    RequestPhoneOTPSerializer,
     VendorDocumentSerializer,
 )
 
@@ -148,56 +150,28 @@ class VendorRetrieveUpdateDeleteAPI(generics.RetrieveUpdateDestroyAPIView):
 class VendorSignupView(generics.GenericAPIView):
     serializer_class = VendorSignupSerializer
     permission_classes = [AllowAny]
-
-    '''def post(self, request, *args, **kwargs):
-        data = request.data.copy()
-        documents = []
-
-        # 🔹 Handle uploaded documents (multipart form)
-        for key in request.FILES:
-            if key.startswith("documents"):
-                file = request.FILES[key]
-                doc_type_key = key.replace("document_file", "document_type")
-                doc_type = data.get(doc_type_key, "Unknown")
-
-                # ---- Upload to S3 ----
-                s3 = boto3.client(
-                    "s3",
-                    aws_access_key_id=config("s3AccessKey"),
-                    aws_secret_access_key=config("s3Secret"),
-                )
-                filename = f"{file.name}"
-                key = f"vendor_docs/{filename}"
-                bucket = config("S3_BUCKET_NAME")
-
-                try:
-                    s3.upload_fileobj(
-                        Fileobj=file,
-                        Bucket=bucket,
-                        Key=key,
-                        ExtraArgs={"ACL": "public-read", "ContentType": file.content_type},
-                    )
-                except Exception as e:
-                    return Response({
-                        "status": False,
-                        "message": "Failed to upload document to S3.",
-                        "error": str(e)
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-                file_url = f"https://{bucket}.s3.amazonaws.com/{key}"
-                documents.append({"document_type": doc_type, "document_file": file_url})
-
-        # 🔹 Attach document URLs to request data
-        data.setlist("documents", documents)'''
-
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
+ 
         if serializer.is_valid():
+            contact_no = serializer.validated_data.get("contact_no")
+            uploaded_docs = VendorDocument.objects.filter(
+            vendor_business_no=contact_no, 
+            status="TEMP"
+        )
+            document_ids = list(uploaded_docs.values_list("id", flat=True))
             vendor = serializer.save()
+            if document_ids:
+                vendor.document_id = document_ids
+                vendor.save(update_fields=["document_id"])
 
+                # Update VendorDocument status to PERMANENT
+                uploaded_docs.update(status="PERMANENT")
+                vendor.save()
+ 
             user_agent_string = request.META.get('HTTP_USER_AGENT', '')
             user_agent = parse(user_agent_string)
-
+ 
             if user_agent.is_mobile:
                 device_type = "Mobile"
             elif user_agent.is_tablet:
@@ -206,14 +180,14 @@ class VendorSignupView(generics.GenericAPIView):
                 device_type = "Desktop"
             else:
                 device_type = "Other"
-
+ 
             device_info = {
                 "device_type": device_type,
                 "os_version": user_agent.os.version_string,
                 "browser_name": user_agent.browser.family,
                 "browser_version": user_agent.browser.version_string,
             }
-
+ 
             # Save or update device info
             VendorDevice.objects.update_or_create(
                 vendor_id=vendor,
@@ -222,9 +196,9 @@ class VendorSignupView(generics.GenericAPIView):
                 browser_name=device_info["browser_name"],
                 defaults={"browser_version": device_info["browser_version"]}
             )
-
+ 
             refresh = RefreshToken.for_user(vendor)
-
+ 
             vendor_data = self.get_serializer(vendor).data
             vendor_data.update({
                     "access": str(refresh.access_token),
@@ -242,7 +216,6 @@ class VendorSignupView(generics.GenericAPIView):
                 "message": "Validation failed.",
                 "errors": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
-        
 @method_decorator(name='post', decorator=swagger_auto_schema(tags=['Vendor login']))
 class VendorLoginView(generics.GenericAPIView):
     serializer_class = VendorLoginSerializer
@@ -306,121 +279,201 @@ class VendorLoginView(generics.GenericAPIView):
         }, status=status.HTTP_200_OK)
 
 
-@method_decorator(name='post', decorator=swagger_auto_schema(tags=['send otp']))
-class RequestOTPView(APIView):
+@method_decorator(name='post', decorator=swagger_auto_schema(tags=['sendEmail- otp']))
+class RequestEmailOTPView(APIView):
     permission_classes = []
 
     def post(self, request):
-        serializer = RequestOTPSerializer(data=request.data)
+        serializer = RequestEmailOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         email = serializer.validated_data.get('email')
-        phone = serializer.validated_data.get('phone')
-
-        otp = generate_numeric_otp()
-        vendor = Vendor_registration.objects.filter(email=email).first()
 
         try:
             with transaction.atomic():
-                # Try to find existing verification by email or phone
-                verification = (
-                    EmailPhoneVerification.objects.filter(email=email)
-                    .first()
-                    or EmailPhoneVerification.objects.filter(phone=phone).first()
-                )
+                # Get or create verification record first
+                verification, created = EmailPhoneVerification.objects.get_or_create(email=email)
 
-                if not verification:
-                    # If not found, create new
-                    verification = EmailPhoneVerification.objects.create(
-                        vendor=vendor, email=email, phone=phone
-                    )
+                # Cooldown check (60 seconds)
+                if (
+                    verification.email_otp_created_at and 
+                    timezone.now() - verification.email_otp_created_at < timedelta(seconds=60)
+                ):
+                    return Response({
+                        "status": False,
+                        "message": "Please wait at least 60 seconds before requesting another OTP."
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-                # Reset and save OTP
-                verification.set_otp(otp)
-                verification.is_blocked_until = None
-                verification.save(update_fields=['otp', 'otp_created_at', 'otp_expired_at', 'is_blocked_until'])
+                # generate and set OTP using model method
+                otp = generate_numeric_otp()
+                verification.set_email_otp(otp)
 
         except Exception as e:
-            return Response(
-                {"status": False, "message": f"Failed to process OTP: {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            logger.exception("Error generating email OTP")
+            return Response({
+                "status": False,
+                "message": f"Failed to process OTP: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Send OTP
-        email_sent = sms_sent = False
-        if email:
-            email_status = send_otp_email(email, otp)
-            email_sent = email_status == 202
-
-        if phone:
-            sms_sent = send_otp_sms(phone, otp)
-
+        # send email OTP
+        email_sent = send_otp_email(email, otp)
         return Response({
             "status": True,
-            "message": "OTP sent successfully",
-            "email_sent": email_sent,
-            "sms_sent": sms_sent,
+            "message": "OTP sent successfully.",
+            "email_sent": email_sent == 202
         }, status=status.HTTP_200_OK)
-    
-@method_decorator(name='post', decorator=swagger_auto_schema(tags=['Verify OTP']))
-class VerifyOTPView(APIView):
+
+
+@method_decorator(name='post', decorator=swagger_auto_schema(tags=['sendPhone otp'])) 
+class RequestPhoneOTPView(APIView):
     permission_classes = []
 
     def post(self, request):
-        serializer = VerifyOTPSerializer(data=request.data)
+        serializer = RequestPhoneOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
-        email = serializer.validated_data['email']
         phone = serializer.validated_data.get('phone')
+
+        try:
+            with transaction.atomic():
+                # Get or create verification record first
+                verification, created = EmailPhoneVerification.objects.get_or_create(phone=phone)
+
+                # Check if the user is temporarily blocked
+                if verification._is_blocked():
+                    return Response({
+                        "status": False,
+                        "message": "Too many failed attempts. Please try again later."
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
+                # Cooldown check (60 seconds)
+                if (
+                    verification.phone_otp_created_at and 
+                    timezone.now() - verification.phone_otp_created_at < timedelta(seconds=60)
+                ):
+                    return Response({
+                        "status": False,
+                        "message": "Please wait at least 60 seconds before requesting another OTP."
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+                # Generate and set OTP
+                otp = generate_numeric_otp()
+                verification.set_phone_otp(otp)
+
+        except ValueError as ve:
+            # Raised if blocked due to too many attempts
+            logger.warning(f"Blocked OTP request for {phone}: {str(ve)}")
+            return Response({
+                "status": False,
+                "message": str(ve)
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        except Exception as e:
+            logger.exception("Error generating phone OTP")
+            return Response({
+                "status": False,
+                "message": f"Failed to process OTP: {str(e)}"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Send SMS OTP
+        sms_sent = send_otp_sms(phone, otp)
+
+        return Response({
+            "status": True,
+            "message": "OTP sent successfully.",
+            "sms_sent": sms_sent
+        }, status=status.HTTP_200_OK)
+    
+
+@method_decorator(name='post', decorator=swagger_auto_schema(tags=['VerifyOTP - Email']))
+class VerifyEmailOTPView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        serializer = VerifyEmailOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
         raw_otp = serializer.validated_data['otp']
-        target = serializer.validated_data['target']
 
         verification = get_object_or_404(EmailPhoneVerification, email=email)
 
-        now = timezone.now()
-        if verification.is_blocked_until and verification.is_blocked_until > now:
-            logger.warning(f"Verification blocked for {email} until {verification.is_blocked_until}")
+        if verification._is_blocked():
             return Response({
                 "status": False,
                 "message": "Too many attempts. Try again later."
             }, status=status.HTTP_403_FORBIDDEN)
-
-        if not verification.check_otp(raw_otp):
+        
+        # validate OTP
+        if not verification.check_email_otp(raw_otp):
             verification.mark_attempt()
             return Response({
                 "status": False,
                 "message": "Invalid or expired OTP."
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # mark email as verified
         with transaction.atomic():
-            if target in ('email', 'both'):
-                verification.is_email_verified = True
-
-            if target in ('phone', 'both') and phone:
-                if verification.phone and verification.phone != phone:
-                    return Response({
-                        "status": False,
-                        "message": "Phone mismatch."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                verification.is_phone_verified = True
-
-            # Clear OTP after success
-            verification.otp = None
-            verification.otp_created_at = None
-            verification.otp_expired_at = None
+            verification.is_email_verified = True
+            verification.email_otp = None
+            verification.email_otp_created_at = None
+            verification.email_otp_expired_at = None
             verification.attempts = 0
             verification.is_blocked_until = None
             verification.save(update_fields=[
-                'is_email_verified', 'is_phone_verified',
-                'otp', 'otp_created_at', 'otp_expired_at',
+                'is_email_verified',
+                'email_otp', 'email_otp_created_at', 'email_otp_expired_at',
                 'attempts', 'is_blocked_until'
             ])
 
         return Response({
             "status": True,
-            "message": "Verified successfully.",
+            "message": "Email Verified successfully.",
             "is_email_verified": verification.is_email_verified,
-            "is_phone_verified": verification.is_phone_verified
+        }, status=status.HTTP_200_OK)
+    
+    
+@method_decorator(name='post', decorator=swagger_auto_schema(tags=['VerifyyyOTP - Phone']))
+class VerifyPhoneOTPView(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        serializer = VerifyPhoneOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone = serializer.validated_data['phone']
+        otp = serializer.validated_data['otp']
+        verification = get_object_or_404(EmailPhoneVerification, phone=phone)
+
+        #check if temporary blocked
+        if verification._is_blocked():
+            return Response({
+                "status": False,
+                "message": "Too many attempts. Try again later."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        
+        #validate OTP
+        if not verification.check_phone_otp(otp):
+            verification.mark_attempt()
+            return Response({
+                "status": False,
+                "message": "Invalid or Expired OTP."
+            },
+            status=status.HTTP_400_BAD_REQUEST)
+        
+        #mark phone as verified
+        with transaction.atomic():
+            verification.is_phone_verified = True
+            verification.phone_otp = None
+            verification.phone_otp_created_at = None
+            verification.phone_otp_expired_at = None
+            verification.attempts = 0
+            verification.is_blocked_until = None
+            verification.save(update_fields=['is_phone_verified', 'phone_otp','phone_otp_created_at',
+             'phone_otp_expired_at', 'attempts', 'is_blocked_until'
+             ])
+            
+        return Response({
+            "status": True,
+            "message": "Phone verified successfully.",
+            "is_phone_verified": verification.is_phone_verified,
         }, status=status.HTTP_200_OK)
 
 
