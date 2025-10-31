@@ -73,8 +73,7 @@ logger = logging.getLogger("django")
 class RoleCreateView(generics.CreateAPIView):    
     queryset = Role_master.objects.all()
     serializer_class = RoleMasterSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+
 
     def perform_create(self, serializer):
         user_fullname = getattr(self.request.user, 'fullname', self.request.user.username)
@@ -100,8 +99,7 @@ class RoleCreateView(generics.CreateAPIView):
 class RoleListView(generics.ListAPIView):
     serializer_class = RoleMasterSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+  
 
     def get_queryset(self):
         queryset = Role_master.objects.filter(status=1).order_by('-id')
@@ -122,8 +120,7 @@ class RoleListView(generics.ListAPIView):
 class RoleUpdateView(generics.UpdateAPIView):
     queryset = Role_master.objects.filter(status=1)
     serializer_class = RoleMasterSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -171,8 +168,7 @@ class RoleDeleteView(generics.DestroyAPIView):
 class BestSuitedForCreateView(generics.CreateAPIView):
     queryset = Best_suited_for.objects.all()
     serializer_class = BestSuitedForSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -217,8 +213,7 @@ class BestSuitedForListView(generics.ListAPIView):
 class BestSuitedForUpdateView(generics.UpdateAPIView):
     queryset = Best_suited_for.objects.filter(status=1)
     serializer_class = BestSuitedForSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+  
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -266,8 +261,7 @@ class BestSuitedForDeleteView(generics.DestroyAPIView):
 class StateCreateView(generics.CreateAPIView):
     queryset = State_master.objects.all()
     serializer_class = StateSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+ 
 
     def perform_create(self, serializer):
         data = serializer.validated_data
