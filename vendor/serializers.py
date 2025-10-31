@@ -1,17 +1,9 @@
 from rest_framework import serializers
-from .models import (
-    Vendor, 
-    Vendor_registration, 
-    VendorDocument,
-    EmailPhoneVerification
-    )
+from .models import Vendor, Vendor_registration, VendorDocument
 from django.contrib.auth import authenticate
 import re
 from django.db import models
 from django.db.models import Q
-from admin_master.models import (
-    CompanyTypeMaster,
-)
 
 
 class VendorSerializer(serializers.ModelSerializer):
@@ -49,11 +41,6 @@ class VendorSignupSerializer(serializers.ModelSerializer):
     mpin = serializers.CharField(write_only=True, required=True)
     date_of_birth = serializers.DateField(input_formats=['%Y-%m-%d', '%d-%m-%Y'])
     documents = VendorDocumentSerializer(many=True, required=False)
-    company_type = serializers.PrimaryKeyRelatedField(
-        queryset=CompanyTypeMaster.objects.all(),
-        required=False,
-        allow_null=True
-    )
 
     class Meta:
         model = Vendor_registration
@@ -63,15 +50,14 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             'business_name', 'service_id', 'best_suited', 'city_id', 'state_id',
             'location', 'working_since', 'year_of_experience',
             'terms_conditions', 'privacy_policy', 'payment_cancellation',
-            'documents', 'document_id', 'payment_status', 'company_type','profile_status'
+            'documents', 'document_id', 'payment_status'
         ]
-        # extra_kwargs = {
-        #     'terms_conditions': {'required': True},
-        #     'privacy_policy': {'required': True},
-        #     'payment_cancellation': {'required': True},
-        # }
+        extra_kwargs = {
+            'terms_conditions': {'required': True},
+            'privacy_policy': {'required': True},
+            'payment_cancellation': {'required': True},
+        }
 
-    # ---------------- VALIDATIONS ----------------
     def validate_email(self, value):
         if value and not re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', value):
             raise serializers.ValidationError("Invalid email format.")
@@ -117,9 +103,8 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             )
         return attrs
 
-    # ---------------- CREATE ----------------
     def create(self, validated_data):
-        # Handle location (pincode, address, lat/lon)
+        # Handle location
         location = validated_data.pop('location', None)
         if location:
             validated_data['pincode'] = location.get('pincode')
@@ -127,36 +112,22 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             validated_data['latitude'] = location.get('latitude')
             validated_data['longitude'] = location.get('longitude')
 
-        # Handle documents (if provided)
+        # Extract documents data (if provided)
         documents_data = validated_data.pop('documents', [])
 
-        # Handle MPIN securely
+        # Extract MPIN
         mpin = validated_data.pop('mpin')
-
-        # Create vendor instance
         user = Vendor_registration(is_active=True, **validated_data)
         user.set_mpin(mpin)
         user.save()
 
-        uploaded_docs = VendorDocument.objects.filter(
-            vendor_business_no=str(user.contact_no),
-            status="TEMP"
-        )
-
-        if uploaded_docs.exists():
-            uploaded_docs.update(status="PERMANENT")
-            document_ids = list(uploaded_docs.values_list("id", flat=True))
-            user.document_id = document_ids
-            user.save(update_fields=["document_id"])
-
-        # # Link uploaded documents to vendor
-        # for doc_data in documents_data:
-        #     VendorDocument.objects.create(vendor=user, **doc_data)
+        # Save each document linked to this vendor
+        for doc_data in documents_data:
+            VendorDocument.objects.create(vendor=user, **doc_data)
 
         user.refresh_from_db()
         return user
 
-    # ---------------- RESPONSE ----------------
     def to_representation(self, instance):
         return {
             "vendor_id": instance.vendor_id,
@@ -175,23 +146,14 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             "address": instance.address,
             "service_name": getattr(instance.service_id, 'service_name', None),
             "best_suited_for": getattr(instance.best_suited, 'subcat_name', None),
-            "company_type": getattr(instance.company_type, 'company_type_name', None)
-            if instance.company_type else None,
             "working_since": instance.working_since,
             "year_of_experience": instance.year_of_experience,
             "referral_code": instance.referral_code,
             "document_id": instance.document_id,
             "payment_status": instance.payment_status,
-            "profile_status": instance.profile_status,
             "created_at": instance.created_at.isoformat() if instance.created_at else None,
-            "documents": VendorDocumentSerializer(
-                VendorDocument.objects.filter(
-                    vendor_business_no=instance.contact_no, status="PERMANENT"
-                ),
-                many=True
-            ).data,
+            # "documents": VendorDocumentSerializer(instance.documents.all(), many=True).data
         }
-
     
 
 class VendorLoginSerializer(serializers.Serializer):
@@ -240,51 +202,20 @@ class VendorDataSerializer(serializers.ModelSerializer):
             "year_of_experience": instance.year_of_experience,
             "referral_code": instance.referral_code,
             "created_at": instance.created_at.isoformat() if instance.created_at else None,
-            "documents": VendorDocumentSerializer(
-                VendorDocument.objects.filter(
-                    vendor_business_no=instance.contact_no, status="PERMANENT"
-                ),
-                many=True
-            ).data,
+            "documents": VendorDocumentSerializer(instance.documents.all(), many=True).data
         }
 
 
-class RequestEmailOTPSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmailPhoneVerification
-        fields = ['email']
-        extra_kwargs = {
-            'email': {'validators': []}
-        }
-
-    def validate_email(self, value):
-        if not value:
-            raise serializers.ValidationError("Email is required.")
-        return value
-    
-class RequestPhoneOTPSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmailPhoneVerification
-        fields = ['phone']
-        extra_kwargs = {
-            'phone': {'validators': []}
-        }
-
-    def validate_phone(self, value):
-        if not value:
-            raise serializers.ValidationError("Phone number is required.")
-        if not value.isdigit():
-            raise serializers.ValidationError("Phone number must contain only digits.")
-        if len(value) < 10:
-            raise serializers.ValidationError("Phone number must be at least 10 digits long.")
-        return value
-
-    
-class VerifyEmailOTPSerializer(serializers.Serializer):
+class RequestOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
-    otp = serializers.CharField(max_length=10)
+    phone = serializers.CharField(required=False, allow_blank=True)
+    purpose = serializers.CharField(required=False, default='verification')
 
-class VerifyPhoneOTPSerializer(serializers.Serializer):
-    phone = serializers.CharField()
+class VerifyOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    phone = serializers.CharField(required=False, allow_blank=True)
     otp = serializers.CharField(max_length=10)
-   
+    target = serializers.ChoiceField(
+        choices=[('email', 'email'), ('phone', 'phone'), ('both', 'both')],
+        default='both'
+    )
