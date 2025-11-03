@@ -18,6 +18,11 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 TEXT_LOCAL_API_KEY = os.getenv("TEXT_LOCAL_API_KEY")
 TEXTLOCAL_SENDER = os.getenv("TEXTLOCAL_SENDER", "OPPVNZ")
 
+AUTHENTICATION_BACKENDS = [
+    'vendor.auth_backend.VendorAuthBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
