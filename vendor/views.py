@@ -159,6 +159,14 @@ class VendorSignupView(generics.GenericAPIView):
             vendor_business_no=contact_no, 
             status="TEMP"
         )
+            
+            if not uploaded_docs.exists():
+                return Response(
+                    {"error": "Please upload at least one document before registration."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+
             document_ids = list(uploaded_docs.values_list("id", flat=True))
             vendor = serializer.save()
             if document_ids:
@@ -216,6 +224,8 @@ class VendorSignupView(generics.GenericAPIView):
                 "message": "Validation failed.",
                 "errors": serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
 @method_decorator(name='post', decorator=swagger_auto_schema(tags=['Vendor login']))
 class VendorLoginView(generics.GenericAPIView):
     serializer_class = VendorLoginSerializer
