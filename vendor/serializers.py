@@ -11,6 +11,7 @@ from django.db import models
 from django.db.models import Q
 from admin_master.models import (
     CompanyTypeMaster,
+    Best_suited_for
 )
 
 
@@ -51,6 +52,11 @@ class VendorSignupSerializer(serializers.ModelSerializer):
     documents = VendorDocumentSerializer(many=True, required=False)
     company_type = serializers.PrimaryKeyRelatedField(
         queryset=CompanyTypeMaster.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    best_suited = serializers.PrimaryKeyRelatedField(
+        queryset=Best_suited_for.objects.all(),
         required=False,
         allow_null=True
     )
@@ -158,6 +164,15 @@ class VendorSignupSerializer(serializers.ModelSerializer):
 
     # ---------------- RESPONSE ----------------
     def to_representation(self, instance):
+        best_suited_name = None
+        company_type_name = None
+
+        if instance.best_suited:
+            best_suited_name = getattr(instance.best_suited, 'subcat_name', None) or getattr(instance.best_suited, 'name', None)
+
+        if instance.company_type:
+            company_type_name = getattr(instance.company_type, 'company_type_name', None) or getattr(instance.company_type, 'company_type', None)
+
         return {
             "vendor_id": instance.vendor_id,
             "business_name": instance.business_name,
@@ -174,9 +189,8 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             "pincode": instance.pincode,
             "address": instance.address,
             "service_name": getattr(instance.service_id, 'service_name', None),
-            "best_suited_for": getattr(instance.best_suited, 'subcat_name', None),
-            "company_type": getattr(instance.company_type, 'company_type_name', None)
-            if instance.company_type else None,
+            "best_suited_for": best_suited_name,
+            "company_type": company_type_name,
             "working_since": instance.working_since,
             "year_of_experience": instance.year_of_experience,
             "referral_code": instance.referral_code,

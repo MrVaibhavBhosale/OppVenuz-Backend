@@ -183,7 +183,7 @@ class VendorDocument(models.Model):
     document_url = models.URLField(default="")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='TEMP')
     uploaded_at = models.DateTimeField(auto_now_add=True)
-
+    vendor_business_no = models.CharField(max_length=20, default="")    
     def default_expiry():
         return timezone.now() + timedelta(hours=1)
     expires_at = models.DateTimeField(default=default_expiry)
@@ -199,8 +199,8 @@ class EmailPhoneVerification(models.Model):
         related_name='verification',
         null=True, blank=True
     )
-    email = models.EmailField(max_length=255, unique=True)
-    phone = models.CharField(max_length=12, unique=True, null=True, blank=True)
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone = models.CharField(max_length=12, null=True, blank=True)
 
     email_otp = models.CharField(max_length=128, null=True, blank=True)
     phone_otp = models.CharField(max_length=128, null=True, blank=True)
