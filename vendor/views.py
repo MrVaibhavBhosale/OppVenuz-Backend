@@ -506,7 +506,7 @@ class VendorDocumentUploadAPIView(APIView):
                 return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Step 1: Get verification entry using phone
-            verification = PhoneVerification.objects.filter(phone=phone, is_verified=True).first()
+            verification = EmailPhoneVerification.objects.filter(phone=phone, is_phone_verified=True).first()
             if not verification:
                 return Response({"error": "Phone number not verified"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -520,7 +520,7 @@ class VendorDocumentUploadAPIView(APIView):
             now = timezone.now()
             VendorDocument.objects.filter(status='TEMP', expires_at__lt=now).update(status='DELETED')
 
-            # Step 4: Upload to S3
+            # Step 4: Upload to S3 with unique filename
             s3 = boto3.client(
                 "s3",
                 aws_access_key_id=config("s3AccessKey"),
@@ -529,8 +529,8 @@ class VendorDocumentUploadAPIView(APIView):
             bucket = config("S3_BUCKET_NAME")
 
             # Generate unique filename
-            file_ext = os.path.splitext(image.name)[1] 
-            unique_name = f"{uuid.uuid4().hex}{file_ext}"  
+            file_ext = os.path.splitext(image.name)[1]  # get extension like .jpg or .pdf
+            unique_name = f"{uuid.uuid4().hex}{file_ext}"  # random unique name
             key = f"vendor_documents/{phone}/{unique_name}"
 
             s3.upload_fileobj(image, bucket, key, ExtraArgs={"ACL": "public-read"})
