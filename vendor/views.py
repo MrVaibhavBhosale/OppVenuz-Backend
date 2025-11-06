@@ -42,6 +42,8 @@ from drf_yasg.utils import swagger_auto_schema
 from django.utils.decorators import method_decorator
 import logging
 import boto3
+import uuid
+import os
 from rest_framework.views import APIView
 logger = logging.getLogger("django")
 
@@ -504,7 +506,7 @@ class VendorDocumentUploadAPIView(APIView):
                 return Response({"error": "Missing required fields"}, status=status.HTTP_400_BAD_REQUEST)
 
             # Step 1: Get verification entry using phone
-            verification = EmailPhoneVerification.objects.filter(phone=phone, is_phone_verified=True).first()
+            verification = PhoneVerification.objects.filter(phone=phone, is_verified=True).first()
             if not verification:
                 return Response({"error": "Phone number not verified"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -525,7 +527,12 @@ class VendorDocumentUploadAPIView(APIView):
                 aws_secret_access_key=config("s3Secret"),
             )
             bucket = config("S3_BUCKET_NAME")
-            key = f"vendor_documents/{phone}/{image.name}"
+
+            # Generate unique filename
+            file_ext = os.path.splitext(image.name)[1] 
+            unique_name = f"{uuid.uuid4().hex}{file_ext}"  
+            key = f"vendor_documents/{phone}/{unique_name}"
+
             s3.upload_fileobj(image, bucket, key, ExtraArgs={"ACL": "public-read"})
             document_url = f"https://{bucket}.s3.amazonaws.com/{key}"
 
@@ -533,10 +540,10 @@ class VendorDocumentUploadAPIView(APIView):
             doc = VendorDocument.objects.create(
                 verification=verification,
                 company_type=company_type_obj,
-                vendor_business_no=phone,
                 document_type=document_type,
                 document_url=document_url,
                 status="TEMP",
+                vendor_business_no=phone,
                 expires_at=timezone.now() + timedelta(hours=1),
             )
 
