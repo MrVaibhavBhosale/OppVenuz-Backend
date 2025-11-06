@@ -42,6 +42,8 @@ from drf_yasg.utils import swagger_auto_schema
 from django.utils.decorators import method_decorator
 import logging
 import boto3
+import uuid
+import os
 from rest_framework.views import APIView
 logger = logging.getLogger("django")
 
@@ -518,14 +520,19 @@ class VendorDocumentUploadAPIView(APIView):
             now = timezone.now()
             VendorDocument.objects.filter(status='TEMP', expires_at__lt=now).update(status='DELETED')
 
-            # Step 4: Upload to S3
+            # Step 4: Upload to S3 with unique filename
             s3 = boto3.client(
                 "s3",
                 aws_access_key_id=config("s3AccessKey"),
                 aws_secret_access_key=config("s3Secret"),
             )
             bucket = config("S3_BUCKET_NAME")
-            key = f"vendor_documents/{phone}/{image.name}"
+
+            # Generate unique filename
+            file_ext = os.path.splitext(image.name)[1]  # get extension like .jpg or .pdf
+            unique_name = f"{uuid.uuid4().hex}{file_ext}"  # random unique name
+            key = f"vendor_documents/{phone}/{unique_name}"
+
             s3.upload_fileobj(image, bucket, key, ExtraArgs={"ACL": "public-read"})
             document_url = f"https://{bucket}.s3.amazonaws.com/{key}"
 
@@ -533,10 +540,10 @@ class VendorDocumentUploadAPIView(APIView):
             doc = VendorDocument.objects.create(
                 verification=verification,
                 company_type=company_type_obj,
-                vendor_business_no=phone,
                 document_type=document_type,
                 document_url=document_url,
                 status="TEMP",
+                vendor_business_no=phone,
                 expires_at=timezone.now() + timedelta(hours=1),
             )
 

@@ -1148,8 +1148,7 @@ class BestDealDeleteView(generics.DestroyAPIView):
 class AppVersionCreateView(generics.CreateAPIView):
     queryset = App_version.objects.filter(status=1)
     serializer_class = AppVersionSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    
 
     def perform_create(self, serializer):
         data = serializer.validated_data
@@ -1168,8 +1167,7 @@ class AppVersionCreateView(generics.CreateAPIView):
 class AppVersionListView(generics.ListAPIView):
     serializer_class = AppVersionSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    
 
     def get_queryset(self):
         queryset = App_version.objects.filter(status=1).order_by('-id')
@@ -1190,8 +1188,7 @@ class AppVersionListView(generics.ListAPIView):
 class AppVersionUpdateView(generics.UpdateAPIView):
     queryset = App_version.objects.filter(status=1)
     serializer_class = AppVersionSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -1209,8 +1206,7 @@ class AppVersionUpdateView(generics.UpdateAPIView):
 class AppVersionDeleteView(generics.DestroyAPIView):
     queryset = App_version.objects.filter(status=1)
     serializer_class = AppVersionSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+   
     lookup_field = 'id'
 
     def destroy(self, request, *args, **kwargs):
