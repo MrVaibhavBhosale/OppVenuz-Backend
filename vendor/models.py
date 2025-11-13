@@ -8,7 +8,8 @@ from admin_master.models import (
     State_master,
     City_master, 
     Best_suited_for,
-    CompanyTypeMaster
+    CompanyTypeMaster,
+    StatusMaster
 )
 from django.utils import timezone
 import random
@@ -63,12 +64,6 @@ class Vendor_registration(models.Model):
     payment_cancellation = models.BooleanField(default=True)   
     # document_id = models.CharField(max_length=100, null=True, blank=True)
     document_id = ArrayField(models.IntegerField(), default=list, blank=True)
-    company_type = models.ForeignKey(
-        CompanyTypeMaster, 
-        on_delete=models.PROTECT, 
-        null=True, 
-        blank=True
-    )  
     PAYMENT_STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('PAID', 'Paid'),
@@ -82,8 +77,9 @@ class Vendor_registration(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')  
     profile_status = models.CharField(max_length=20, choices=PROFILE_STATUS_CHOICES, default='PENDING')  
     is_active = models.BooleanField(default=True)
-    status = models.IntegerField(default=1)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
     reason = models.TextField(max_length=255)
+    profile_image = models.URLField(null=True, blank=True)
     updated_by = models.CharField(max_length=100, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -148,10 +144,11 @@ class VendorDevice(models.Model):
     browser_name = models.CharField(max_length=50, null=True, blank=True)
     browser_version = models.CharField(max_length=50, null=True, blank=True)
     last_login = models.DateTimeField(auto_now=True)
-    status = models.IntegerField(default=1)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
+    os_type = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
-        unique_together = ('vendor_id', 'device_type', 'os_version', 'browser_name')
+        unique_together = ('vendor_id', 'device_type', 'os_version', 'browser_name', 'os_type')
 
     def __str__(self):
         return f"{self.vendor} - {self.device_type} {self.os_version}"
@@ -166,7 +163,7 @@ class VendorDocument(models.Model):
 
     id = models.AutoField(primary_key=True)
     verification = models.ForeignKey(
-        "EmailPhoneVerification",
+        "PhoneVerification",
         on_delete=models.CASCADE,
         related_name="documents",
         null=True,
@@ -191,113 +188,193 @@ class VendorDocument(models.Model):
         phone = self.verification.phone if self.verification else "NoPhone"
         return f"{phone} - {self.document_type}"
 
-
-class EmailPhoneVerification(models.Model):
-    vendor = models.OneToOneField(
-        "Vendor_registration",
-        on_delete=models.CASCADE,
-        related_name='verification',
-        null=True, blank=True
-    )
-    email = models.EmailField(max_length=255, blank=True, null=True)
-    phone = models.CharField(max_length=12, null=True, blank=True)
-
-    email_otp = models.CharField(max_length=128, null=True, blank=True)
-    phone_otp = models.CharField(max_length=128, null=True, blank=True)
-
-    email_otp_created_at = models.DateTimeField(null=True, blank=True)
-    email_otp_expired_at = models.DateTimeField(null=True, blank=True)
-    phone_otp_created_at = models.DateTimeField(null=True, blank=True)
-    phone_otp_expired_at = models.DateTimeField(null=True, blank=True)
-
-    is_email_verified = models.BooleanField(default=False)
-    is_phone_verified = models.BooleanField(default=False)
-
+class AbstractVerification(models.Model):
+    otp = models.CharField(max_length=128, null=True, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    otp_expired_at = models.DateTimeField(null=True, blank=True)
     attempts = models.IntegerField(default=0)
     is_blocked_until = models.DateTimeField(null=True, blank=True)
-    status = models.IntegerField(default=1)
+    is_verified = models.BooleanField(default=False)
 
     MAX_ATTEMPTS = 5
-    OTP_TTL_SECONDS = 300  # 5 minutes
-    BLOCK_SECONDS = 300  # 5 minutes block
+    OTP_TTL_SECONDS = 600       # 10 minutes
+    BLOCK_SECONDS = 3600        # 1 hour
 
-    def __str__(self):
-        return self.email or self.phone or "Verification Record"
+    class Meta:
+        abstract = True
 
-    def set_email_otp(self, raw_otp):
-        if self._is_blocked():
-            raise ValueError("Too many failed attempts. Try again later.")
+    # ========= OTP LOGIC =========
+
+    def set_otp(self, raw_otp):
+        """Save a new hashed OTP and reset block/attempt counters"""
         now = timezone.now()
-        self.email_otp = make_password(raw_otp)
-        self.email_otp_created_at = now
-        self.email_otp_expired_at = now + timedelta(seconds=self.OTP_TTL_SECONDS)
+        self.otp = make_password(raw_otp)
+        self.otp_created_at = now
+        self.otp_expired_at = now + timedelta(seconds=self.OTP_TTL_SECONDS)
         self.attempts = 0
         self.is_blocked_until = None
         self.save(update_fields=[
-            'email_otp', 'email_otp_created_at', 'email_otp_expired_at',
-            'attempts', 'is_blocked_until'
+            'otp', 'otp_created_at', 'otp_expired_at',
+            'attempts', 'is_blocked_until', 'is_verified'
         ])
 
-    def check_email_otp(self, raw_otp):
+    def check_otp(self, raw_otp):
+        """Validate OTP correctness and expiry"""
         now = timezone.now()
-        if self._is_blocked(): return False
-        if not self.email_otp or not self.email_otp_expired_at or now > self.email_otp_expired_at:
+
+        if not self.otp or not self.otp_expired_at:
             return False
-        return check_password(raw_otp, self.email_otp)
 
-    def set_phone_otp(self, raw_otp):
-        now = timezone.now()
-        self.phone_otp = make_password(raw_otp)
-        self.phone_otp_created_at = now
-        self.phone_otp_expired_at = now + timedelta(seconds=self.OTP_TTL_SECONDS)
-        self.attempts = 0
-        self.is_blocked_until = None
-        self.save(update_fields=[
-            'phone_otp', 'phone_otp_created_at', 'phone_otp_expired_at',
-            'attempts', 'is_blocked_until'
-        ])
-
-    def check_phone_otp(self, raw_otp):
-        now = timezone.now()
-        if self._is_blocked(): return False
-        if not self.phone_otp or not self.phone_otp_expired_at or now > self.phone_otp_expired_at:
+        if now > self.otp_expired_at:
             return False
-        return check_password(raw_otp, self.phone_otp)
 
-    # ================= COMMON =================
+        try:
+            return check_password(str(raw_otp), self.otp)
+        except (TypeError, ValueError):
+            # This will safely handle cases where OTP is None or invalid
+            return False
 
     def _is_blocked(self):
+        """Return remaining block seconds if still blocked, else False"""
         if self.is_blocked_until and timezone.now() < self.is_blocked_until:
             remaining = (self.is_blocked_until - timezone.now()).seconds
-            return remaining  # e.g., 180 seconds left
+            return remaining
         return False
 
     def mark_attempt(self):
+        """Track OTP verification attempts"""
         self.attempts += 1
         if self.attempts >= self.MAX_ATTEMPTS:
             self.is_blocked_until = timezone.now() + timedelta(seconds=self.BLOCK_SECONDS)
             self.attempts = 0
         self.save(update_fields=['attempts', 'is_blocked_until'])
 
-    def reset_otp_state(self, channel):
-        """Clear OTP after successful verification."""
-        if channel == 'email':
-            fields = ['email_otp', 'email_otp_created_at', 'email_otp_expired_at']
-        elif channel == 'phone':
-            fields = ['phone_otp', 'phone_otp_created_at', 'phone_otp_expired_at']
-        else:
-            return
-        for field in fields:
-            setattr(self, field, None)
-        self.attempts = 0
-        self.is_blocked_until = None
-        self.save(update_fields=fields + ['attempts', 'is_blocked_until'])
-
-    def can_request_new_otp(self, channel, cooldown_seconds=60):
-        """Prevent users from spamming OTP requests."""
+    def can_request_new_otp(self, cooldown_seconds=60):
+        """Prevent users from spamming OTP requests"""
         now = timezone.now()
-        if channel == 'email' and self.email_otp_created_at:
-            return (now - self.email_otp_created_at).total_seconds() > cooldown_seconds
-        elif channel == 'phone' and self.phone_otp_created_at:
-            return (now - self.phone_otp_created_at).total_seconds() > cooldown_seconds
+        if self.otp_created_at:
+            return (now - self.otp_created_at).total_seconds() > cooldown_seconds
         return True
+
+    def mark_verified(self):
+        """Mark OTP as successfully verified"""
+        self.is_verified = True
+        self.save(update_fields=['is_verified'])
+        return True
+
+class EmailVerification(AbstractVerification):
+    email = models.EmailField(max_length=255,unique=True, blank=True, null=True)
+
+    def __str__(self):
+        return self.email or "Email Verification"
+        
+class PhoneVerification(AbstractVerification):
+    phone = models.CharField(max_length=12, unique=True, null=True, blank=True)
+
+    def __str__(self):
+        return self.phone or "Phone Verification"
+
+class VenderBusinessDescription(models.Model):
+    vendor = models.ForeignKey(
+        Vendor_registration,
+        on_delete=models.CASCADE,
+        related_name='business_descriptions'
+    )
+    vendor_reg_id = models.CharField(max_length=12, db_index=True)  
+    description = models.CharField(max_length=5000)
+    status = models.IntegerField(default=1)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Description for {self.vendor_reg_id}"
+
+class ReadyToSellItem(models.Model):
+    product_name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True, null=True)
+    image_urls = ArrayField(models.URLField(), default=list, blank=True)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.product_name
+    
+class ProductAddition(models.Model):
+    addon_name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    image_urls = ArrayField(models.URLField(), default=list, blank=True)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.addon_name
+    
+class VendorService(models.Model):
+    vendor_id = models.ForeignKey(
+        Vendor_registration,
+        on_delete=models.PROTECT,
+        related_name='services',
+        null=True,
+        blank=True
+    )
+    data = models.JSONField()
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.CharField(max_length=120, null=True, blank=True)
+    updated_by = models.CharField(max_length=120, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.vendor_id}"
+    
+class VendorSocialMedia(models.Model):
+    vendor = models.ForeignKey(
+        Vendor_registration,
+        on_delete=models.CASCADE,
+        related_name='social_media'
+    )
+    vendor_reg_id = models.CharField(max_length=12, db_index=True)
+    facebook_link = models.URLField(max_length=500, null=True, blank=True)
+    instagram_link = models.URLField(max_length=500, null=True, blank=True)
+    whatsapp_group_link = models.URLField(max_length=500, null=True, blank=True)
+    youtube_link = models.URLField(max_length=500, null=True, blank=True)
+    pinterest_link = models.URLField(max_length=500, null=True, blank=True)
+    status = models.IntegerField(default=1)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
+    updated_by = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Social Media for {self.vendor_reg_id}"
+    
+class VendorMedia(models.Model):
+    MEDIA_TYPE_CHOICES = [
+        ('IMAGE', 'Image'),
+        ('VIDEO', 'Video'),
+    ]
+
+    vendor = models.ForeignKey(
+        Vendor_registration,
+        on_delete=models.CASCADE,
+        related_name='vendor_media'
+    )
+    vendor_code = models.CharField(max_length=12, db_index=True) 
+    file_url = models.URLField(max_length=1000)
+    media_type = models.CharField(max_length=10, choices=MEDIA_TYPE_CHOICES)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    status = models.CharField(max_length=10, default='ACTIVE')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.media_type} - {self.vendor_code}"
