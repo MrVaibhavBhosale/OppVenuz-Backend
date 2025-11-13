@@ -2,7 +2,6 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from vendor.authentication import VendorJWTAuthentication
 from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
@@ -73,7 +72,8 @@ logger = logging.getLogger("django")
 class RoleCreateView(generics.CreateAPIView):    
     queryset = Role_master.objects.all()
     serializer_class = RoleMasterSerializer
-
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         user_fullname = getattr(self.request.user, 'fullname', self.request.user.username)
@@ -99,7 +99,8 @@ class RoleCreateView(generics.CreateAPIView):
 class RoleListView(generics.ListAPIView):
     serializer_class = RoleMasterSerializer
     permission_classes = [AllowAny]
-  
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Role_master.objects.filter(status=1).order_by('-id')
@@ -120,7 +121,8 @@ class RoleListView(generics.ListAPIView):
 class RoleUpdateView(generics.UpdateAPIView):
     queryset = Role_master.objects.filter(status=1)
     serializer_class = RoleMasterSerializer
-
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -168,7 +170,8 @@ class RoleDeleteView(generics.DestroyAPIView):
 class BestSuitedForCreateView(generics.CreateAPIView):
     queryset = Best_suited_for.objects.all()
     serializer_class = BestSuitedForSerializer
-   
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -191,8 +194,8 @@ class BestSuitedForCreateView(generics.CreateAPIView):
 class BestSuitedForListView(generics.ListAPIView):
     serializer_class = BestSuitedForSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Best_suited_for.objects.filter(status=1).order_by('-id')
@@ -213,7 +216,8 @@ class BestSuitedForListView(generics.ListAPIView):
 class BestSuitedForUpdateView(generics.UpdateAPIView):
     queryset = Best_suited_for.objects.filter(status=1)
     serializer_class = BestSuitedForSerializer
-  
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
     lookup_field = 'id'
 
     def perform_update(self, serializer):
@@ -261,7 +265,8 @@ class BestSuitedForDeleteView(generics.DestroyAPIView):
 class StateCreateView(generics.CreateAPIView):
     queryset = State_master.objects.all()
     serializer_class = StateSerializer
- 
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         data = serializer.validated_data
@@ -283,8 +288,8 @@ class StateCreateView(generics.CreateAPIView):
 class StateListView(generics.ListAPIView):
     serializer_class = StateSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = State_master.objects.filter(status=1).order_by('-id')
@@ -402,8 +407,8 @@ city_list_parameters = [
 class CityListView(generics.ListAPIView):
     serializer_class = CitySerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = City_master.objects.filter(status=1).order_by('-id')
@@ -506,8 +511,8 @@ class PaymentTypeCreateView(generics.CreateAPIView):
 class PaymentTypeListView(generics.ListAPIView):
     serializer_class = PaymentTypeSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Payment_type.objects.filter(status=1).order_by('-id')
@@ -885,8 +890,8 @@ class ArticleTypeCreateView(generics.CreateAPIView):
 class ArticleTypeListView(generics.ListAPIView):
     serializer_class = ArticleTypeSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Article_type.objects.filter(status=1).order_by('-id')
@@ -980,8 +985,8 @@ class DeliveryOptionCreateView(generics.CreateAPIView):
 class DeliveryOptionListView(generics.ListAPIView):
     serializer_class = DeliveryOptionSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Delivery_option.objects.filter(status=1).order_by('-id')
@@ -1076,8 +1081,8 @@ class BestDealCreateView(generics.CreateAPIView):
 class BestDealListView(generics.ListAPIView):
     serializer_class = BestDealSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Best_deal.objects.filter(status=1).order_by('-id')
@@ -1168,8 +1173,8 @@ class AppVersionCreateView(generics.CreateAPIView):
 class AppVersionListView(generics.ListAPIView):
     serializer_class = AppVersionSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = App_version.objects.filter(status=1).order_by('-id')
@@ -1234,6 +1239,9 @@ class AppVersionDeleteView(generics.DestroyAPIView):
 
 @method_decorator(name='get', decorator=swagger_auto_schema(tags=['Admin Base API']))
 class BaseAPIView(APIView):
+    permission_classes = [AllowAny]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
             # ------------------- Base Data -------------------
@@ -1405,6 +1413,9 @@ class CompanyTypeCreateView(generics.CreateAPIView):
 @method_decorator(name='get', decorator=swagger_auto_schema(tags=['company-type']))
 class CompanyTypeListView(generics.ListAPIView):
     serializer_class = CompanyTypeMasterSerializer
+    permission_classes = [AllowAny]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         active_status = get_status('Active')
@@ -1997,8 +2008,8 @@ class QuestionAnswerCreateView(generics.CreateAPIView):
 class QuestionAnswerListView(generics.ListAPIView):
     serializer_class = QuestionAnswerSerializer
     permission_classes = [AllowAny]
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Oppvenuz_ques_ans_master.objects.filter(status=1).order_by('-id')
