@@ -15,6 +15,22 @@ def generate_numeric_otp(length=6):
     otp = str(random.randint(start, end))
     return otp
 
+def mask_phone(phone):
+    if not phone:
+        return phone
+    phone = str(phone)
+    return phone[:2] + "******" + phone[-2:]
+
+def mask_email(email):
+    if not email or '@' not in email:
+        return email
+    name, domain = email.split('@', 1)
+    if len(email) <= 2:
+        masked_name = name[0] + "****"
+    else:
+        masked_name = name[:2] + "****"
+    return masked_name + '@' + domain
+
 def send_otp_email(email, otp):
     from_email = settings.DEFAULT_FROM_EMAIL
     template_id = constants.VENDOR_EMAIL_VERIFICATION_TEMPLATE
