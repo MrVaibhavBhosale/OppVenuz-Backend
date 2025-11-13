@@ -3,19 +3,11 @@ from .models import (
     Vendor, 
     Vendor_registration, 
     VendorDocument,
-    PhoneVerification,
-    EmailVerification,
-    VenderBusinessDescription,
-    VendorDevice,
-    ReadyToSellItem,
-    ProductAddition,
-    VendorSocialMedia,
-    VendorMedia,
+    EmailPhoneVerification
     )
 from django.contrib.auth import authenticate
 import re
 from django.db import models
-import os
 from django.db.models import Q
 from admin_master.models import (
     CompanyTypeMaster,
@@ -58,6 +50,11 @@ class VendorSignupSerializer(serializers.ModelSerializer):
     mpin = serializers.CharField(write_only=True, required=True)
     date_of_birth = serializers.DateField(input_formats=['%Y-%m-%d', '%d-%m-%Y'])
     documents = VendorDocumentSerializer(many=True, required=False)
+    company_type = serializers.PrimaryKeyRelatedField(
+        queryset=CompanyTypeMaster.objects.all(),
+        required=False,
+        allow_null=True
+    )
     best_suited = serializers.PrimaryKeyRelatedField(
         queryset=Best_suited_for.objects.all(),
         required=False,
@@ -71,13 +68,14 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             'gender', 'date_of_birth', 'mpin',
             'business_name', 'service_id', 'best_suited', 'city_id', 'state_id',
             'location', 'working_since', 'year_of_experience',
-            'documents', 'payment_status','profile_status'
+            'terms_conditions', 'privacy_policy', 'payment_cancellation',
+            'documents', 'document_id', 'payment_status', 'company_type','profile_status'
         ]
-        extra_kwargs = {
-            # 'terms_conditions': {'required': True},
-            # 'privacy_policy': {'required': True},
-            # 'payment_cancellation': {'required': True},
-        }
+        # extra_kwargs = {
+        #     'terms_conditions': {'required': True},
+        #     'privacy_policy': {'required': True},
+        #     'payment_cancellation': {'required': True},
+        # }
 
     # ---------------- VALIDATIONS ----------------
     def validate_email(self, value):
@@ -102,8 +100,8 @@ class VendorSignupSerializer(serializers.ModelSerializer):
     def validate_mpin(self, value):
         if not value.isdigit():
             raise serializers.ValidationError("MPIN must contain only digits.")
-        if len(value) != 6:
-            raise serializers.ValidationError("MPIN must be 6 digits long.")
+        if len(value) < 4 or len(value) > 6:
+            raise serializers.ValidationError("MPIN must be 4–6 digits long.")
         return value
 
     def validate_year_of_experience(self, value):
@@ -136,7 +134,7 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             validated_data['longitude'] = location.get('longitude')
 
         # Handle documents (if provided)
-        document_ids = validated_data.pop("documents", [])
+        documents_data = validated_data.pop('documents', [])
 
         # Handle MPIN securely
         mpin = validated_data.pop('mpin')
@@ -146,20 +144,20 @@ class VendorSignupSerializer(serializers.ModelSerializer):
         user.set_mpin(mpin)
         user.save()
 
-        # ✅ Default image set (if not given)
-        if not user.profile_image:
-            user.profile_image = os.getenv('DEFAULT_VENDOR_IMAGE_PATH')
-        user.save()
-
         uploaded_docs = VendorDocument.objects.filter(
             vendor_business_no=str(user.contact_no),
             status="TEMP"
         )
 
         if uploaded_docs.exists():
+            uploaded_docs.update(status="PERMANENT")
             document_ids = list(uploaded_docs.values_list("id", flat=True))
             user.document_id = document_ids
-            user.save(update_fields=["document_id"])        
+            user.save(update_fields=["document_id"])
+
+        # # Link uploaded documents to vendor
+        # for doc_data in documents_data:
+        #     VendorDocument.objects.create(vendor=user, **doc_data)
 
         user.refresh_from_db()
         return user
@@ -167,9 +165,13 @@ class VendorSignupSerializer(serializers.ModelSerializer):
     # ---------------- RESPONSE ----------------
     def to_representation(self, instance):
         best_suited_name = None
+        company_type_name = None
 
         if instance.best_suited:
             best_suited_name = getattr(instance.best_suited, 'subcat_name', None) or getattr(instance.best_suited, 'name', None)
+
+        if instance.company_type:
+            company_type_name = getattr(instance.company_type, 'company_type_name', None) or getattr(instance.company_type, 'company_type', None)
 
         return {
             "vendor_id": instance.vendor_id,
@@ -188,6 +190,7 @@ class VendorSignupSerializer(serializers.ModelSerializer):
             "address": instance.address,
             "service_name": getattr(instance.service_id, 'service_name', None),
             "best_suited_for": best_suited_name,
+            "company_type": company_type_name,
             "working_since": instance.working_since,
             "year_of_experience": instance.year_of_experience,
             "referral_code": instance.referral_code,
@@ -251,9 +254,6 @@ class VendorDataSerializer(serializers.ModelSerializer):
             "year_of_experience": instance.year_of_experience,
             "referral_code": instance.referral_code,
             "created_at": instance.created_at.isoformat() if instance.created_at else None,
-            "payment_status": instance.payment_status,
-            "profile_status": instance.profile_status,
-            "profile_image": instance.profile_image,
             "documents": VendorDocumentSerializer(
                 VendorDocument.objects.filter(
                     vendor_business_no=instance.contact_no, status="PERMANENT"
@@ -265,7 +265,7 @@ class VendorDataSerializer(serializers.ModelSerializer):
 
 class RequestEmailOTPSerializer(serializers.ModelSerializer):
     class Meta:
-        model = EmailVerification
+        model = EmailPhoneVerification
         fields = ['email']
         extra_kwargs = {
             'email': {'validators': []}
@@ -278,7 +278,7 @@ class RequestEmailOTPSerializer(serializers.ModelSerializer):
     
 class RequestPhoneOTPSerializer(serializers.ModelSerializer):
     class Meta:
-        model = PhoneVerification
+        model = EmailPhoneVerification
         fields = ['phone']
         extra_kwargs = {
             'phone': {'validators': []}
@@ -302,143 +302,3 @@ class VerifyPhoneOTPSerializer(serializers.Serializer):
     phone = serializers.CharField()
     otp = serializers.CharField(max_length=10)
    
-class ForgotMPINRequestSerializer(serializers.Serializer):
-    email = serializers.EmailField(required=False)
-    phone = serializers.CharField(required=False)
-
-    def validate(self, data):
-        email = data.get('email')
-        phone = data.get('phone')
-
-        if not email and not phone:
-            raise serializers.ValidationError("Email or phone is required.")
-
-        if email:
-            verification = EmailVerification.objects.filter(email=email, is_verified=True).first()
-            if not verification:
-                raise serializers.ValidationError("Email not verified or not found.")
-
-        elif phone:
-            verification = PhoneVerification.objects.filter(phone=phone, is_verified=True).first()
-            if not verification:
-                raise serializers.ValidationError("Phone number not verified or not found.")
-
-        return data
-
-class ChangeMPINSerializer(serializers.ModelSerializer):
-    new_mpin = serializers.CharField(write_only=True, required=True)
-    email = serializers.EmailField(required=False)
-    contact_no = serializers.CharField(required=False)
-
-    class Meta:
-        model = Vendor_registration
-        fields = ['email', 'contact_no', 'new_mpin']
-
-    def validate_new_mpin(self, value):
-        if not value.isdigit():
-            raise serializers.ValidationError("MPIN must contain only digits.")
-        if len(value) != 6:
-            raise serializers.ValidationError("MPIN must be exactly 6 digits long.")
-        return value
-
-    def validate(self, attrs):
-        email = attrs.get('email')
-        contact_no = attrs.get('contact_no')
-
-        if not email and not contact_no:
-            raise serializers.ValidationError("Either email or contact_no required")
-        
-        if email and contact_no:
-            raise serializers.ValidationError("Provide only one of email and contact_no, not both")
-        
-        try:
-            if email:
-                vendor = Vendor_registration.objects.get(email=email)
-            else:
-                vendor = Vendor_registration.objects.get(contact_no=contact_no)
-        except Vendor_registration.DoesNotExist:
-            raise serializers.ValidationError("No vendor found with this email or contact_no")
-        
-        attrs['vendor'] = vendor
-        return attrs
-
-    def save(self, **kwargs):
-        vendor = self.validated_data["vendor"]
-        new_mpin = self.validated_data["new_mpin"]
-        vendor.set_mpin(new_mpin)
-        vendor.save(update_fields=['mpin'])
-        return vendor
-
-class VenderBusinessDescriptionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VenderBusinessDescription
-        fields = ['id', 'vendor_reg_id', 'description']
-        read_only_fields = ['vendor_reg_id']
-
-class ReadyToSellItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ReadyToSellItem
-        fields = "__all__"
-
-class ProductAdditionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProductAddition
-        fields = '__all__'
-
-class VendorRegistrationSerializer(serializers.ModelSerializer):
-    state_name = serializers.CharField(source='state_id.state_name', read_only=True)
-    city_name = serializers.CharField(source='city_id.city_name', read_only=True)
-    service_name = serializers.CharField(source='service_id.service_name', read_only=True)
-    documents = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Vendor_registration
-        fields = [
-            'id', 'vendor_id', 'business_name',
-            'first_name', 'middle_name', 'last_name',
-            'email', 'contact_no', 'whatsapp_no',
-            'gender', 'date_of_birth',
-            'state_id', 'state_name', 'city_id', 'city_name',
-            'pincode', 'address', 'latitude', 'longitude',
-            'service_id', 'service_name', 'best_suited',
-            'working_since', 'year_of_experience',
-            'is_active', 'created_at', 'updated_at',
-            'documents'
-        ]
-
-    def get_documents(self, obj):
-        try:
-            docs = VendorDocument.objects.filter(vendor_business_no=obj.contact_no)
-            return [
-                {
-                    "id": doc.id,
-                    "document_type": doc.document_type,
-                    "document_url": doc.document_url,
-                    "status": doc.status,
-                    "company_type": doc.company_type.company_type if doc.company_type else None,
-                    "uploaded_at": doc.uploaded_at,
-                    "expires_at": doc.expires_at,
-               }
-               for doc in docs
-           ]
-        except Exception as e:
-            return []
-
-class VendorBasicDetailsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Vendor_registration
-        fields = [
-            'first_name', 'middle_name', 'last_name',
-            'business_name', 'gender', 'date_of_birth',
-            'service_id', 'best_suited', 'year_of_experience'
-        ]
-
-class VendorSocialMediaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VendorSocialMedia
-        fields = '__all__'
-
-class VendorMediaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = VendorMedia
-        fields = "__all__"
