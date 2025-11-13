@@ -151,7 +151,7 @@ class Best_deal(models.Model):
 # Model For App Version
 class App_version(models.Model):
 
-    app_version = models.CharField(max_length=255, unique=True) 
+    app_version = models.CharField(max_length=255) 
     is_force_update = models.BooleanField(default=False) 
     status = models.IntegerField(default=1)
     created_by = models.CharField(max_length=255, null=True, blank=True)
@@ -316,14 +316,9 @@ class OnboardingScreens(models.Model):
 
 
 class Social_media_master(models.Model):
-    STATUS_CHOICES = [
-        (1, 'ACTIVE'),
-        (2, 'INACTIVE'),
-        (3, 'DELETE'),
-    ]
     media_name = models.CharField(max_length=255, unique=True)
     media_image = models.URLField(max_length=300)
-    status = models.IntegerField(default=1)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=255, null=True, blank=True)
@@ -333,16 +328,10 @@ class Social_media_master(models.Model):
         return self.media_name
     
 class Terms_and_condition_master(models.Model):
-    STATUS_CHOICES = [
-        (1, 'ACTIVE'),
-        (2, 'INACTIVE'),
-        (3, 'DELETE'),
-    ]
-
     title = models.CharField(max_length=255)
     content = models.TextField()
     slug = models.CharField(max_length=255, unique=True, blank=True)
-    status = models.IntegerField(choices=STATUS_CHOICES, default=1)
+    status = models.ForeignKey(StatusMaster, on_delete=models.PROTECT, default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.CharField(max_length=255, null=True, blank=True)
